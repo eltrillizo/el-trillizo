@@ -299,8 +299,9 @@ textarea.inp{min-height:70px;resize:vertical}
 const CONFIG = {
   whatsapp: "573204955721",          // número que recibe los pedidos (57 + número)
   // ID de la hoja de Google Sheets (lo que va entre /d/ y /edit en el enlace)
-  sheetId: "",
-  sheetTab: "Inventario",            // nombre de la pestaña
+  sheetId: "1el_sPz4oGnkNxcyPvCfpLlLzwtXbYzGrfRW2TVEG5CY",
+  sheetGid: "709404148",             // número de la pestaña (lo que va después de gid= en el enlace)
+  sheetTab: "Inventario",            // nombre de la pestaña (se usa si no hay sheetGid)
   refrescarCadaSeg: 60,              // cada cuánto revisa cambios en la hoja
   horario: { dias:[5,6,0], abre:17, cierra:22 }, // vie, sáb, dom · 5 PM a 10 PM (hora Colombia)
 };
@@ -425,11 +426,19 @@ function parseCSV(t){
 const NO = ["no","agotado","agotada","0","false","falso","x"];
 async function loadSheet(){
   if(!CONFIG.sheetId){ INV={}; DEMO_AGOTADOS.forEach(id=>INV[id]={disponible:false}); return; }
-  const url=`https://docs.google.com/spreadsheets/d/${CONFIG.sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(CONFIG.sheetTab)}&t=${Date.now()}`;
+  const url=`https://docs.google.com/spreadsheets/d/${CONFIG.sheetId}/gviz/tq?tqx=out:csv&${CONFIG.sheetGid?"gid="+CONFIG.sheetGid:"sheet="+encodeURIComponent(CONFIG.sheetTab)}&t=${Date.now()}`;
   try{
     const res=await fetch(url,{cache:"no-store"}); if(!res.ok) throw 0;
-    const rows=parseCSV(await res.text()); const h=rows.shift().map(x=>x.trim().toLowerCase());
-    const iId=h.indexOf("id"), iP=h.indexOf("precio"), iD=h.indexOf("disponible");
+    const rows=parseCSV(await res.text()); const raw=rows.shift()||[];
+    const h=raw.map(x=>x.trim().toLowerCase());
+    const col=n=>h.findIndex(x=>x.split(/\s+/)[0]===n);
+    const iId=col("id"), iP=col("precio"), iD=col("disponible");
+    if(iId<0||iD<0) throw 0;
+    // Google a veces junta en el encabezado las primeras filas que no tienen precio
+    // (local y categorías). Aquí se recuperan.
+    const extraIds=h[iId].split(/\s+/).slice(1), extraD=h[iD].split(/\s+/).slice(1);
+    if(extraIds.length && extraIds.length===extraD.length)
+      extraIds.forEach((id,k)=>{const r=[];r[iId]=id;r[iD]=extraD[k];r[iP]="";rows.unshift(r);});
     const next={};
     rows.forEach(r=>{const id=(r[iId]||"").trim(); if(!id) return;
       const p=parseInt(String(r[iP]||"").replace(/[^\d]/g,""),10);
