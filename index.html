@@ -170,6 +170,16 @@ textarea.inp{min-height:70px;resize:vertical}
 .after{margin-top:14px;background:var(--surface-2);border-radius:12px;padding:12px;font-size:.88rem}
 .after button{border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:7px 12px;margin-top:8px;font-weight:600}
 .empty{text-align:center;color:var(--muted);padding:30px 0}
+.segnote{display:block;font-size:.75rem;font-weight:600;opacity:.8}
+.paybox{margin-top:12px;border:2px dashed var(--teal);border-radius:14px;padding:12px 14px;display:grid;gap:10px}
+.pay-title{margin:0;font-family:var(--f-name);text-transform:uppercase;font-size:1.1rem;letter-spacing:.03em;color:var(--teal)}
+.acct{display:flex;justify-content:space-between;align-items:center;gap:12px;background:var(--bg);border-radius:12px;padding:10px 12px}
+.acct>div{display:grid;min-width:0}
+.acct b{font-size:1.25rem;font-variant-numeric:tabular-nums;letter-spacing:.02em;overflow-wrap:anywhere}
+.acct.amt b{color:var(--yellow)}
+.copy{flex:0 0 auto;border:0;background:var(--teal);color:var(--on-accent);font-weight:800;letter-spacing:.08em;text-transform:uppercase;border-radius:10px;padding:10px 14px}
+.copy.ok{background:#3ddc84}
+.paysteps{margin:0;padding-left:20px;color:var(--muted);font-size:.85rem;display:grid;gap:2px}
 
 .toast{position:fixed;left:50%;bottom:96px;transform:translate(-50%,20px);background:var(--teal);color:var(--on-accent);font-weight:700;padding:10px 18px;border-radius:999px;z-index:60;opacity:0;transition:.25s;pointer-events:none;white-space:nowrap}
 .toast.show{opacity:1;transform:translate(-50%,0)}
@@ -189,8 +199,7 @@ textarea.inp{min-height:70px;resize:vertical}
   </div>
   <div class="meta">
     <span class="status" id="status"><i></i><span id="statusTxt">…</span></span>
-    <span>Vie · Sáb · Dom &nbsp;5:00 – 10:00 PM</span>
-    <span>Domicilios 320 495 5721</span>
+    <span>Sáb · Dom &nbsp;5:00 – 11:00 PM · Lunes festivos 5:00 – 10:00 PM</span>
   </div>
   <div id="banners"></div>
 </header>
@@ -201,7 +210,7 @@ textarea.inp{min-height:70px;resize:vertical}
 
 <footer class="wrap">
   <strong>EL TRILLIZO</strong> · Gracias por preferirnos<br>
-  Domicilios y pedidos: 310 331 9467 · 320 495 5721
+  Pedidos por WhatsApp: 320 495 5721 · Otro teléfono: 310 331 9467
 </footer>
 
 <div class="cartbar" id="cartbar" hidden>
@@ -239,7 +248,7 @@ textarea.inp{min-height:70px;resize:vertical}
     <form id="orderForm" novalidate>
       <h4>¿Cómo lo quieres?</h4>
       <div class="seg">
-        <label><input type="radio" name="tipo" id="tDom" value="Domicilio" checked>Domicilio</label>
+        <label><input type="radio" name="tipo" id="tDom" value="Domicilio" checked><span id="tDomTxt">Domicilio</span><small class="segnote" id="domFeeNote"></small></label>
         <label><input type="radio" name="tipo" id="tRec" value="Para recoger">Para recoger</label>
       </div>
 
@@ -272,6 +281,12 @@ textarea.inp{min-height:70px;resize:vertical}
         <input class="inp" id="fCambio" inputmode="numeric" placeholder="Ej: 50.000">
       </div>
       <p class="small" id="transNote">Te enviamos los datos para la transferencia por WhatsApp al confirmar el pedido.</p>
+      <div class="paybox" id="payBox" hidden>
+        <p class="pay-title">Datos para transferir</p>
+        <div id="acctList"></div>
+        <div class="acct amt"><div><span class="small">Valor a transferir</span><b id="payAmt">$0</b></div><button type="button" class="copy" data-copy="amt">Copiar</button></div>
+        <ol class="paysteps"><li>Copia el número o la llave</li><li>Envía tu pedido por WhatsApp</li><li>Transfiere desde tu app y mándanos el comprobante en el mismo chat</li></ol>
+      </div>
 
       <label class="lbl" for="fObs">Observaciones del pedido</label>
       <textarea class="inp" id="fObs" maxlength="300" placeholder="Ej: tocar el timbre, traer servilletas extra…"></textarea>
@@ -283,6 +298,7 @@ textarea.inp{min-height:70px;resize:vertical}
       </a>
       <div class="after" id="after" hidden>
         Se abrió WhatsApp con tu pedido. Solo dale <strong>Enviar</strong> en el chat.<br>
+        <span id="afterPay">Después haz la transferencia y mándanos el comprobante por el mismo chat.<br></span>
         ¿No se abrió? Escríbenos al <strong>320 495 5721</strong> y pega el pedido:
         <br><button type="button" id="copyMsg">Copiar pedido</button>
       </div>
@@ -298,12 +314,18 @@ textarea.inp{min-height:70px;resize:vertical}
    ========================================================= */
 const CONFIG = {
   whatsapp: "573204955721",          // número que recibe los pedidos (57 + número)
+  empaque: 1000,                     // valor del empaque desechable en domicilios
+  // Cuentas para transferencia (se muestran con botón COPIAR). Deja valor:"" para ocultar una.
+  cuentas: [
+    { tipo:"Nequi y Llave",  valor:"320 495 5721", titular:"" },
+  ],
   // ID de la hoja de Google Sheets (lo que va entre /d/ y /edit en el enlace)
   sheetId: "1el_sPz4oGnkNxcyPvCfpLlLzwtXbYzGrfRW2TVEG5CY",
   sheetGid: "709404148",             // número de la pestaña (lo que va después de gid= en el enlace)
   sheetTab: "Inventario",            // nombre de la pestaña (se usa si no hay sheetGid)
   refrescarCadaSeg: 60,              // cada cuánto revisa cambios en la hoja
-  horario: { dias:[5,6,0], abre:17, cierra:22 }, // vie, sáb, dom · 5 PM a 10 PM (hora Colombia)
+  // Horario (hora Colombia, formato 24 h). Los lunes festivos se calculan solos cada año.
+  horario: { finDeSemana:{abre:17, cierra:23}, lunesFestivo:{abre:17, cierra:22} },
 };
 
 /* =========================================================
@@ -312,19 +334,23 @@ const CONFIG = {
 const PLATANO = {group:"Pan", key:"pan", choices:[
   {id:"pan-normal", label:"En pan", price:0},
   {id:"platano", label:"En plátano", price:2000}]};
-const PIZZA_TAM = (porcion)=>({group:"Tamaño", key:"tam", choices:[
-  ...(porcion?[{id:"pizza-porcion", label:"Porción", price:10000, abs:true}]:[]),
+/* Solo aparece cuando la hamburguesa va en plátano; no tiene costo adicional */
+const PICADO = {group:"¿Cómo quieres tu hamburguesa?", key:"picado", dependsOn:"platano", choices:[
+  {id:"platano-picado", label:"Picada", price:0},
+  {id:"platano-entero", label:"Entera", price:0}]};
+const SABOR = (pref, list)=>({group:"Sabor", key:"sabor", choices:list.map(([id,label,price])=>({id:pref+id, label, price:price||0, abs:!!price}))});
+const PIZZA_TAM = ()=>({group:"Tamaño", key:"tam", choices:[
   {id:"pizza-pequena", label:"Pequeña (1–2 personas)", price:22000, abs:true},
   {id:"pizza-mediana", label:"Mediana (2–3 personas)", price:36000, abs:true},
   {id:"pizza-familiar", label:"Familiar (5–6 personas)", price:62000, abs:true}]});
 
 const MENU = [
  {id:"hamburguesas", name:"Hamburguesas", note:"Pídelas <strong>en plátano</strong> por + $2.000", items:[
-  {id:"hamb-callejera", name:"Hamburguesa Callejera", price:10000, desc:"Carne artesanal, queso, papitas cabello de ángel, lechuga, tomate, cebolla caramelizada y salsas de la casa.", opts:[PLATANO]},
-  {id:"hamb-ranchera", name:"Hamburguesa Ranchera", price:16500, desc:"En plátano, tocineta, carne de la casa, ahogado, queso, lechuga, tomate, huevo frito, maíz y chorizo."},
-  {id:"hamb-trillizo", name:"Hamburguesa El Trillizo", price:17000, desc:"Carne artesanal, tocineta, pollo desmechado, jamón, lechuga, queso, cebolla caramelizada, papitas cabello de ángel y salsas de la casa.", opts:[PLATANO]},
-  {id:"hamb-doble-piso", name:"Hamburguesa Doble Piso", price:15000, desc:"Doble carne artesanal, doble queso, papitas cabello de ángel, cebolla caramelizada, lechuga, tomate y salsas de la casa.", opts:[PLATANO]},
-  {id:"hamb-mexicana", name:"Hamburguesa Mexicana", price:18000, desc:"Carne desmechada, guacamole, chile con carne, pico de gallo, jalapeños, nachos, queso, lechuga, papitas y salsas de la casa.", opts:[PLATANO]},
+  {id:"hamb-callejera", name:"Hamburguesa Callejera", price:10000, desc:"Carne artesanal, queso, papitas cabello de ángel, lechuga, tomate, cebolla caramelizada y salsas de la casa.", opts:[PLATANO,PICADO]},
+  {id:"hamb-ranchera", name:"Hamburguesa Ranchera", price:16500, desc:"En plátano, tocineta, carne de la casa, ahogado, queso, lechuga, tomate, huevo frito, maíz y chorizo.", opts:[PICADO]},
+  {id:"hamb-trillizo", name:"Hamburguesa El Trillizo", price:17000, desc:"Carne artesanal, tocineta, pollo desmechado, jamón, lechuga, queso, cebolla caramelizada, papitas cabello de ángel y salsas de la casa.", opts:[PLATANO,PICADO]},
+  {id:"hamb-doble-piso", name:"Hamburguesa Doble Piso", price:15000, desc:"Doble carne artesanal, doble queso, papitas cabello de ángel, cebolla caramelizada, lechuga, tomate y salsas de la casa.", opts:[PLATANO,PICADO]},
+  {id:"hamb-mexicana", name:"Hamburguesa Mexicana", price:18000, desc:"Carne desmechada, guacamole, chile con carne, pico de gallo, jalapeños, nachos, queso, lechuga, papitas y salsas de la casa.", opts:[PLATANO,PICADO]},
  ]},
  {id:"promos", name:"Promociones", note:"Hamburguesas callejeras para compartir", items:[
   {id:"promo-3", name:"3 Hamburguesas Callejeras", price:27000, desc:"Ahorra $3.000 frente a pedirlas sueltas."},
@@ -332,18 +358,22 @@ const MENU = [
   {id:"promo-5", name:"5 Hamburguesas Callejeras", price:44000, desc:"Ahorra $6.000 frente a pedirlas sueltas."},
  ]},
  {id:"pizzas", name:"Pizzas", note:"Masa artesanal y productos de primera calidad", pizza:true, items:[
-  {id:"pizza-hawaiana", name:"Pizza Hawaiana", desc:"Jamón, queso y piña especial de la casa.", opts:[PIZZA_TAM(true)]},
+  {id:"pizzeta", name:"Pizzeta + gaseosa", price:14000, desc:"Pizza individual con gaseosa Pool personal incluida.", opts:[SABOR("pizzeta-",[
+    ["hawaiana","Hawaiana"],["ranchera","Ranchera"],["romana","Romana"],["carnes","Carnes"],["pollo-champinones","Pollo con champiñones"]]),
+    {group:"Gaseosa Pool incluida", key:"gaseosa", choices:[
+      {id:"pool-cola", label:"Pool Cola", price:0},{id:"pool-manzana", label:"Pool Manzana", price:0},{id:"pool-colombiana", label:"Pool Colombiana", price:0}]}]},
+  {id:"pizza-hawaiana", name:"Pizza Hawaiana", desc:"Jamón, queso y piña especial de la casa.", opts:[PIZZA_TAM()]},
   {id:"pizza-colombiana", name:"Pizza Colombiana", desc:"Ahogado, chorizo, carne desmechada, tocineta, maíz, cebolla, pimentón, plátano maduro y queso.", opts:[PIZZA_TAM()]},
   {id:"pizza-criolla", name:"Pizza Criolla", desc:"Maíz, cilantro, tomate y carne desmechada.", opts:[PIZZA_TAM()]},
-  {id:"pizza-americana", name:"Pizza Americana", desc:"Piña, tocineta y pollo.", opts:[PIZZA_TAM(true)]},
+  {id:"pizza-americana", name:"Pizza Americana", desc:"Piña, tocineta y pollo.", opts:[PIZZA_TAM()]},
   {id:"pizza-carnes", name:"Pizza de Carnes", desc:"Pollo, salami, salchicha, jamón y queso.", opts:[PIZZA_TAM()]},
   {id:"pizza-vegetales-carne", name:"Pizza Vegetales y Carne", desc:"Pimentón, cebolla, champiñón, salami, salchicha, pollo, jamón y queso.", opts:[PIZZA_TAM()]},
   {id:"pizza-ranchera", name:"Pizza Ranchera", desc:"Carne desmechada, maíz, chorizo, tocineta, queso y champiñones.", opts:[PIZZA_TAM()]},
   {id:"pizza-napolitana", name:"Pizza Napolitana", desc:"Tomate en rodajas, orégano y queso.", opts:[PIZZA_TAM()]},
   {id:"pizza-mexicana", name:"Pizza Mexicana", desc:"Guacamole, fríjol refrito, pico de gallo, tostacos, jalapeños, carne y queso.", opts:[PIZZA_TAM()]},
-  {id:"pizza-pollo-champinones", name:"Pizza Pollo con Champiñones", desc:"Pollo, champiñones y queso.", opts:[PIZZA_TAM(true)]},
+  {id:"pizza-pollo-champinones", name:"Pizza Pollo con Champiñones", desc:"Pollo, champiñones y queso.", opts:[PIZZA_TAM()]},
   {id:"pizza-primavera", name:"Pizza Primavera", desc:"Champiñón, tomate, orégano y queso.", opts:[PIZZA_TAM()]},
-  {id:"pizza-romana", name:"Pizza Romana", desc:"Chorizo, salchicha, tocineta, maíz y queso.", opts:[PIZZA_TAM(true)]},
+  {id:"pizza-romana", name:"Pizza Romana", desc:"Chorizo, salchicha, tocineta, maíz y queso.", opts:[PIZZA_TAM()]},
   {id:"pizza-pepperoni", name:"Pizza de Pepperoni y Queso", desc:"Pepperoni y queso.", opts:[PIZZA_TAM()]},
  ]},
  {id:"salchipapas", name:"Salchipapas", items:[
@@ -378,6 +408,17 @@ const MENU = [
   {id:"super-nachos", name:"Súper Nachos", price:23000, desc:"Totopos en cama de lechuga al limón con picadillo de carne y pollo, chile con carne, pico de gallo, guacamole, queso, salsa blanca y jalapeños."},
   {id:"dorilocos-salvajes", name:"Dorilocos Salvajes", price:27000, desc:"Pollo, carne, salchicha, queso, tocineta, salsas de la casa, platanitos, pico de gallo, guacamole, chile, maíz tierno y picante a tu gusto."},
   {id:"dorilocos-mini", name:"Dorilocos Mini", price:17000, desc:"Pollo, carne, maíz tierno, queso, pico de gallo, guacamole y salsas de la casa."},
+ ]},
+ /* Bebidas: se llenan solas desde la hoja con las filas cuyo id empieza por "bebida-" */
+ {id:"bebidas", name:"Bebidas", items:[
+  {id:"gaseosa-125", name:"Gaseosa litro y cuarto", desc:"1,25 litros.", opts:[SABOR("gaseosa-125-",[
+    ["coca","Coca-Cola",8500],["manzana","Manzana",8000],["colombiana","Colombiana",8000]])]},
+  {id:"hit-litro", name:"Jugo Hit litro", price:6500, desc:"Tropical, naranja-piña, mango o mora.", opts:[SABOR("hit-",[
+    ["tropical","Tropical"],["naranja-pina","Naranja-piña"],["mango","Mango"],["mora","Mora"]])]},
+  {id:"coca-personal", name:"Coca-Cola personal", price:4500, desc:""},
+  {id:"pool-personal", name:"Gaseosa Pool personal", price:2500, desc:"Cola, manzana o colombiana.", opts:[SABOR("pool-",[
+    ["cola","Cola"],["manzana","Manzana"],["colombiana","Colombiana"]])]},
+  {id:"soda-pool", name:"Soda Pool", price:2500, desc:""},
  ]},
 ];
 
@@ -432,7 +473,7 @@ async function loadSheet(){
     const rows=parseCSV(await res.text()); const raw=rows.shift()||[];
     const h=raw.map(x=>x.trim().toLowerCase());
     const col=n=>h.findIndex(x=>x.split(/\s+/)[0]===n);
-    const iId=col("id"), iP=col("precio"), iD=col("disponible");
+    const iId=col("id"), iP=col("precio"), iD=col("disponible"), iN=col("producto");
     if(iId<0||iD<0) throw 0;
     // Google a veces junta en el encabezado las primeras filas que no tienen precio
     // (local y categorías). Aquí se recuperan.
@@ -440,13 +481,32 @@ async function loadSheet(){
     if(extraIds.length && extraIds.length===extraD.length)
       extraIds.forEach((id,k)=>{const r=[];r[iId]=id;r[iD]=extraD[k];r[iP]="";rows.unshift(r);});
     const next={};
-    rows.forEach(r=>{const id=(r[iId]||"").trim(); if(!id) return;
+    rows.forEach(r=>{const id=(r[iId]||"").trim().toLowerCase(); if(!id) return;
       const p=parseInt(String(r[iP]||"").replace(/[^\d]/g,""),10);
       const d=String(r[iD]||"").trim().toLowerCase();
-      next[id]={precio:isNaN(p)?null:p, disponible:!NO.includes(d)};});
+      next[id]={precio:isNaN(p)?null:p, disponible:!NO.includes(d), nombre:iN>=0?String(r[iN]||"").trim():""};});
     INV=next; sheetOk=true;
   }catch(e){ /* si falla, se queda con lo último que cargó */ }
 }
+
+/* Festivos de Colombia: fijos, trasladables al lunes (Ley Emiliani) y los que dependen de Semana Santa */
+function esFestivo(d){
+  const y=d.getFullYear(), key=(dt)=>dt.getFullYear()+"-"+dt.getMonth()+"-"+dt.getDate();
+  const a=y%19,b=Math.floor(y/100),c=y%100,dd=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3),
+        h=(19*a+b-dd-g+15)%30,i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7,m=Math.floor((a+11*h+22*l)/451),
+        mes=Math.floor((h+l-7*m+114)/31)-1, dia=((h+l-7*m+114)%31)+1;
+  const pascua=new Date(y,mes,dia), mas=(n)=>new Date(y,mes,dia+n);
+  const lunes=(dt)=>{const w=dt.getDay(); return w===1?dt:new Date(dt.getFullYear(),dt.getMonth(),dt.getDate()+((8-w)%7));};
+  const fijos=[[0,1],[4,1],[6,20],[7,7],[11,8],[11,25]].map(([mm,dd2])=>new Date(y,mm,dd2));
+  const emiliani=[[0,6],[2,19],[5,29],[7,15],[9,12],[10,1],[10,11]].map(([mm,dd2])=>lunes(new Date(y,mm,dd2)));
+  const santos=[mas(-3),mas(-2),lunes(mas(39)),lunes(mas(60)),lunes(mas(68))];
+  return [...fijos,...emiliani,...santos].map(key).includes(key(d));
+}
+/* Domicilio: fila "domicilio" en la hoja (NO = solo para recoger).
+   Empaque desechable: fila "empaque" (precio = valor; NO = no se cobra). Si no existe, usa CONFIG.empaque */
+function domOn(){return avail("domicilio")}
+function domFee(){const r=INV["empaque"]; if(r&&r.disponible===false) return 0;
+  return (r&&r.precio!=null)?r.precio:CONFIG.empaque}
 
 /* =========================================================
    Pintar menú
@@ -457,25 +517,28 @@ function render(){
 
   // estado del local
   const now=new Date(new Date().toLocaleString("en-US",{timeZone:"America/Bogota"}));
-  const h=now.getHours(); const open=CONFIG.horario.dias.includes(now.getDay()) && h>=CONFIG.horario.abre && h<CONFIG.horario.cierra;
+  const h=now.getHours(), dw=now.getDay();
+  const tramo = (dw===6||dw===0) ? CONFIG.horario.finDeSemana : (dw===1 && esFestivo(now)) ? CONFIG.horario.lunesFestivo : null;
+  const open = !!tramo && h>=tramo.abre && h<tramo.cierra;
   const pausado=!avail("local");
   $("#status").className="status "+(open&&!pausado?"open":"closed");
-  $("#statusTxt").textContent=pausado?"No recibimos pedidos ahora":open?"Abierto ahora":"Cerrado ahora";
+  $("#statusTxt").textContent=pausado?"No recibimos pedidos ahora":"Abierto ahora";
+  $("#status").hidden=!open&&!pausado;
   let b="";
   if(pausado) b+=`<div class="banner red">Por hoy no estamos recibiendo pedidos. ¡Te esperamos en el próximo turno!</div>`;
-  else if(!open) b+=`<div class="banner">Abrimos viernes, sábados y domingos de 5:00 a 10:00 PM. Puedes armar tu pedido y enviarlo; te respondemos al abrir.</div>`;
+  else if(!open) b+=`<div class="banner">Abrimos sábados y domingos de 5:00 a 11:00 PM y lunes festivos de 5:00 a 10:00 PM. Puedes armar tu pedido y enviarlo; te respondemos al abrir.</div>`;
   $("#banners").innerHTML=b;
 
   // chips
-  $("#cats").innerHTML=MENU.map(c=>`<button type="button" class="chip${avail(c.id)?"":" off"}" data-go="${c.id}">${c.name}</button>`).join("");
+  $("#cats").innerHTML=MENU.filter(c=>c.items.length).map(c=>`<button type="button" class="chip${avail(c.id)?"":" off"}" data-go="${c.id}">${c.name}</button>`).join("");
 
   // secciones
   const qtyIn=id=>cart.filter(l=>l.itemId===id).reduce((a,l)=>a+l.qty,0);
-  $("#menu").innerHTML=MENU.map(cat=>{
+  $("#menu").innerHTML=MENU.filter(c=>c.items.length).map(cat=>{
     const catOn=avail(cat.id);
     let sizes="";
-    if(cat.pizza){ const g=PIZZA_TAM(true).choices;
-      sizes=`<div class="sizes">${g.map(c=>`<span class="size${avail(c.id)&&catOn?"":" off"}">${c.label.replace(/ \(.*/,"")}${c.id==="pizza-porcion"?" <span class='small'>(hawaiana, americana, romana o pollo con champiñones)</span>":` <span class='small'>${(c.label.match(/\((.*)\)/)||[])[1]||""}</span>`}<b>${fmt(priceOf(c.id,c.price))}</b></span>`).join("")}</div>`;}
+    if(cat.pizza){ const g=PIZZA_TAM().choices;
+      sizes=`<div class="sizes">${g.map(c=>`<span class="size${avail(c.id)&&catOn?"":" off"}">${c.label.replace(/ \(.*/,"")} <span class='small'>${(c.label.match(/\((.*)\)/)||[])[1]||""}</span><b>${fmt(priceOf(c.id,c.price))}</b></span>`).join("")}</div>`;}
     return `<section class="cat" id="${cat.id}">
       <div class="cat-head"><h2>${cat.name}</h2>${catOn?"":`<span class="cat-stamp">Agotado por hoy</span>`}</div>
       ${cat.note?`<p class="cat-note">${cat.note}</p>`:""}${sizes}
@@ -486,8 +549,8 @@ function render(){
         return `<article class="card${soldout?" soldout":""}">
           ${q?`<span class="incart">${q} en tu pedido</span>`:""}
           <div class="card-top"><h3>${it.name}</h3><span class="price">${desde?'<span class="small">desde </span>':""}${fmt(fromPrice(it))}</span></div>
-          <p>${it.desc}</p>
-          <div class="card-foot"><span class="hint">${it.opts?it.opts.map(g=>g.key==="pan"?"También en plátano":"Elige tamaño").join(" · "):""}</span>
+          ${it.desc?`<p>${it.desc}</p>`:""}
+          <div class="card-foot"><span class="hint">${it.opts?it.opts.filter(g=>!(g.key==="picado"&&it.opts.some(o=>o.key==="pan"))).map(g=>g.key==="pan"?"También en plátano":g.key==="picado"?"Picada o entera":g.key==="sabor"?"Elige sabor":g.key==="gaseosa"?"Gaseosa incluida":"Elige tamaño").join(" · "):""}</span>
             <button class="add" type="button" data-add="${it.id}" ${on?"":"disabled"}>${soldout?"Agotado":"+ Agregar"}</button></div>
           ${soldout?`<div class="stamp"><span>¡Agotado!<small>POR HOY</small></span></div>`:""}
         </article>`}).join("")}</div></section>`;
@@ -503,22 +566,31 @@ function findItem(id){for(const c of MENU)for(const it of c.items)if(it.id===id)
 function openItem(id){
   const {cat,it}=findItem(id); cur={cat,it}; curQty=1;
   $("#isName").textContent=it.name; $("#isDesc").textContent=it.desc; $("#isNote").value="";
+  const sinNota=cat.id==="bebidas"; $("#isNote").hidden=sinNota; document.querySelector('label[for="isNote"]').hidden=sinNota;
   $("#isOpts").innerHTML=(it.opts||[]).map((g,gi)=>{
     const firstOn=g.choices.find(c=>avail(c.id));
-    return `<h4>${g.group}</h4><div class="opts">${g.choices.map(c=>{const on=avail(c.id);
-      const p=priceOf(c.id,c.price); const ptxt=c.abs?fmt(p):(p?"+ "+fmt(p):"");
-      return `<label class="opt${on?"":" dis"}"><input type="radio" name="g${gi}" value="${c.id}" ${on?"":"disabled"} ${c===firstOn?"checked":""}><span>${c.label}${on?"":" — agotado"}</span><em>${ptxt}</em></label>`}).join("")}</div>`}).join("");
+    return `<div class="og" id="og${gi}"><h4>${g.group}</h4><div class="opts">${g.choices.map(c=>{const on=avail(c.id);
+      const p=priceOf(c.id,c.price); const ptxt=c.abs?fmt(p):(p?"+ "+fmt(p):(g.key==="picado"?"Incluido":""));
+      return `<label class="opt${on?"":" dis"}"><input type="radio" name="g${gi}" value="${c.id}" ${on?"":"disabled"} ${c===firstOn?"checked":""}><span>${c.label}${on?"":" — agotado"}</span><em>${ptxt}</em></label>`}).join("")}</div></div>`}).join("");
   updItemPrice(); openSheet("#itemSheet");
 }
-function selChoices(){const it=cur.it; return (it.opts||[]).map((g,gi)=>{const v=document.querySelector(`input[name="g${gi}"]:checked`).value; return g.choices.find(c=>c.id===v);});}
+/* Un grupo con dependsOn solo se muestra si esa opción está elegida (o si el producto no la tiene, ej. Ranchera ya va en plátano) */
+function groupVisible(g){if(!g.dependsOn) return true;
+  const inp=document.querySelector(`#isOpts input[value="${g.dependsOn}"]`); return !inp || inp.checked;}
+function selGroups(){const it=cur.it; return (it.opts||[]).map((g,gi)=>{
+  if(!groupVisible(g)) return null;
+  const v=document.querySelector(`input[name="g${gi}"]:checked`).value; return {g,c:g.choices.find(c=>c.id===v)};}).filter(Boolean);}
+function selChoices(){return selGroups().map(x=>x.c)}
 function unitPrice(){let p=cur.it.price!=null?priceOf(cur.it.id,cur.it.price):0;
   selChoices().forEach(c=>{const v=priceOf(c.id,c.price); if(c.abs)p=v; else p+=v;}); return p;}
-function updItemPrice(){$("#isQty").textContent=curQty; $("#isPrice").textContent=fmt(unitPrice()*curQty);}
+function updItemPrice(){
+  (cur.it.opts||[]).forEach((g,gi)=>{$("#og"+gi).hidden=!groupVisible(g)});
+  $("#isQty").textContent=curQty; $("#isPrice").textContent=fmt(unitPrice()*curQty);}
 $("#isOpts").addEventListener("change",updItemPrice);
 $("#isMinus").onclick=()=>{if(curQty>1){curQty--;updItemPrice()}};
 $("#isPlus").onclick=()=>{if(curQty<30){curQty++;updItemPrice()}};
 $("#isAdd").onclick=()=>{
-  const ch=selChoices(); const labels=ch.filter(c=>c.price||c.abs).map(c=>c.label);
+  const sg=selGroups(), ch=sg.map(x=>x.c); const labels=sg.filter(x=>x.c.price||x.c.abs||x.g.key!=="pan").map(x=>x.c.label);
   const note=$("#isNote").value.trim(); const key=cur.it.id+"|"+ch.map(c=>c.id).join(",")+"|"+note;
   const ex=cart.find(l=>l.key===key);
   if(ex) ex.qty+=curQty; else cart.push({key,itemId:cur.it.id,catId:cur.cat.id,choiceIds:ch.map(c=>c.id),name:cur.it.name,optLabels:labels,unit:unitPrice(),qty:curQty,note});
@@ -531,6 +603,10 @@ $("#isAdd").onclick=()=>{
    ========================================================= */
 function saveCart(){ls.set("trillizo_cart",cart)}
 function total(){return cart.reduce((a,l)=>a+l.unit*l.qty,0)}
+/* El empaque se cobra una vez por pedido (domicilio o recoger), solo si lleva comida: las bebidas ya vienen en botella */
+function nEmpaques(){return cart.filter(l=>l.catId!=="bebidas").reduce((a,l)=>{const f=findItem(l.itemId); return a+l.qty*((f&&f.it.empaques)||1)},0)}
+function empaqueFee(){return nEmpaques()*(domFee()||0)}
+function grandTotal(){return total()+empaqueFee()}
 function renderCartBar(){const n=cart.reduce((a,l)=>a+l.qty,0);
   $("#cartbar").hidden=!n; $("#cCount").textContent=n; $("#cTot").textContent=fmt(total());}
 function lineOk(l){const f=findItem(l.itemId); if(!f) return false;
@@ -543,10 +619,10 @@ function renderCart(){
     ${lineOk(l)?"":`<span class="s" style="grid-column:1/-1;color:#ff9aa2">Se acaba de agotar. Quítalo para continuar.</span>`}
     <div class="ctl"><span class="stepper"><button type="button" data-q="${i}" data-d="-1" aria-label="Menos">−</button><output>${l.qty}</output><button type="button" data-q="${i}" data-d="1" aria-label="Más">+</button></span>
     <button type="button" class="rm" data-rm="${i}">Quitar</button></div></div>`).join("");
-  const dom=$("#tDom").checked;
+  const fee=empaqueFee();
   $("#totals").innerHTML=`<div><span>Productos</span><span>${fmt(total())}</span></div>
-    ${dom?`<div class="small"><span>Domicilio</span><span>se confirma por WhatsApp</span></div>`:""}
-    <div class="grand"><span>Total</span><span>${fmt(total())}${dom?" + dom.":""}</span></div>`;
+    ${fee?`<div><span>Empaques desechables (${nEmpaques()} × ${fmt(domFee())})</span><span>${fmt(fee)}</span></div>`:""}    <div class="grand"><span>Total a pagar</span><span>${fmt(grandTotal())}</span></div>`;
+  $("#payAmt").textContent=fmt(grandTotal());
 }
 $("#lines").addEventListener("click",e=>{const b=e.target.closest("button"); if(!b)return;
   if(b.dataset.rm!=null) cart.splice(+b.dataset.rm,1);
@@ -558,11 +634,18 @@ $("#lines").addEventListener("click",e=>{const b=e.target.closest("button"); if(
    ========================================================= */
 const F=["fNombre","fTel","fBarrio","fDir","fRef","fObs","fCambio"];
 function fillHoras(){const s=$("#fHora"); const opts=["Lo antes posible"];
-  for(let h=17;h<22;h++)for(const m of["00","30"])opts.push(`${h-12}:${m} PM`);
+  for(let h=17;h<23;h++)for(const m of["00","30"])opts.push(`${h-12}:${m} PM`);
+  opts.push("11:00 PM");
   s.innerHTML=opts.map(o=>`<option>${o}</option>`).join("");}
-function syncForm(){const dom=$("#tDom").checked;
+function syncForm(){
+  const on=domOn(); $("#tDom").disabled=!on;
+  $("#tDomTxt").textContent=on?"Domicilio":"Domicilio (no disponible)";
+  if(!on && $("#tDom").checked) $("#tRec").checked=true;
+  const dom=$("#tDom").checked;
   $("#domFields").hidden=!dom; $("#recFields").hidden=dom;
-  $("#cambioBox").hidden=!$("#pEfec").checked; $("#transNote").hidden=$("#pEfec").checked;
+  $("#domFeeNote").textContent="";
+  const efec=$("#pEfec").checked, hayCuentas=cuentas().length>0;
+  $("#cambioBox").hidden=!efec; $("#transNote").hidden=efec||hayCuentas; $("#payBox").hidden=efec||!hayCuentas;
   renderCart(); buildLink();}
 $("#orderForm").addEventListener("input",()=>{buildLink(); ls.set("trillizo_cliente",Object.fromEntries(["fNombre","fTel","fBarrio","fDir","fRef"].map(k=>[k,$("#"+k).value])));});
 $("#orderForm").addEventListener("change",syncForm);
@@ -589,14 +672,15 @@ function buildMsg(){
   L.push("");
   cart.forEach(l=>{L.push(`• ${l.qty} x ${l.name}${l.optLabels.length?" ("+l.optLabels.join(", ")+")":""} — ${fmt(l.unit*l.qty)}`); if(l.note) L.push(`   _Nota: ${l.note}_`);});
   L.push("");
-  L.push(`*Total productos: ${fmt(total())}*`);
-  if(dom) L.push("Valor del domicilio: por confirmar");
+  const fee=empaqueFee();
+  L.push(`Productos: ${fmt(total())}`);
+  if(fee) L.push(`Empaques desechables (${nEmpaques()}): ${fmt(fee)}`);  L.push(`*TOTAL A PAGAR: ${fmt(grandTotal())}*`);
   L.push("");
   L.push(`*Nombre:* ${v("fNombre")}`);
   L.push(`*Teléfono:* ${v("fTel")}`);
   if(dom){L.push(`*Barrio:* ${v("fBarrio")}`); L.push(`*Dirección:* ${v("fDir")}`); if(v("fRef")) L.push(`*Referencia:* ${v("fRef")}`);}
   else L.push(`*Hora de recogida:* ${$("#fHora").value}`);
-  L.push(`*Pago:* ${efec?"Efectivo":"Transferencia"}${efec&&v("fCambio")?" — paga con "+(/^\d/.test(v("fCambio"))?"$":"")+v("fCambio"):""}`);
+  L.push(`*Pago:* ${efec?"Efectivo":"Transferencia (envío el comprobante por este chat)"}${efec&&v("fCambio")?" — paga con "+(/^\d/.test(v("fCambio"))?"$":"")+v("fCambio"):""}`);
   if(v("fObs")) L.push(`*Observaciones:* ${v("fObs")}`);
   return L.join("\n");
 }
@@ -605,7 +689,25 @@ $("#sendWa").addEventListener("click",e=>{
   buildLink(); const err=validate();
   if(err){e.preventDefault(); $("#formErr").textContent=err; $("#formErr").hidden=false; const f=document.querySelector(".inp.err"); f&&f.focus(); return;}
   $("#formErr").hidden=true; $("#after").hidden=false;
+  $("#afterPay").hidden=$("#pEfec").checked||!cuentas().length;
 });
+/* Cuentas de pago con botón COPIAR */
+function cuentas(){return (CONFIG.cuentas||[]).filter(c=>c.valor&&String(c.valor).trim())}
+function renderAccounts(){
+  $("#acctList").innerHTML=cuentas().map((c,i)=>`<div class="acct"><div><span class="small">${c.tipo}${c.titular?" · "+c.titular:""}</span><b>${c.valor}</b></div><button type="button" class="copy" data-copy="${i}">Copiar</button></div>`).join("");
+}
+async function copyText(t,btn){
+  let ok=false;
+  try{await navigator.clipboard.writeText(t); ok=true;}catch(e){
+    try{const ta=document.createElement("textarea"); ta.value=t; ta.setAttribute("readonly",""); ta.style.position="fixed"; ta.style.opacity="0";
+      document.body.appendChild(ta); ta.select(); ok=document.execCommand("copy"); ta.remove();}catch(e2){}
+  }
+  if(ok){btn.textContent="¡Copiado!"; btn.classList.add("ok"); setTimeout(()=>{btn.textContent="Copiar"; btn.classList.remove("ok")},1800); toast("Copiado: "+t);}
+  else toast("Mantén presionado el número para copiarlo");
+}
+$("#payBox").addEventListener("click",e=>{const b=e.target.closest("[data-copy]"); if(!b) return;
+  const k=b.dataset.copy; const t=k==="amt"?String(Math.round(grandTotal())):String(cuentas()[+k].valor).replace(/\s+/g,"");
+  copyText(t,b);});
 $("#copyMsg").onclick=async()=>{try{await navigator.clipboard.writeText(lastMsg);toast("Pedido copiado")}catch(e){toast("No se pudo copiar")}};
 
 /* =========================================================
@@ -630,11 +732,14 @@ let tt; function toast(t){$("#toast").textContent=t; $("#toast").classList.add("
    Inicio
    ========================================================= */
 (async function(){
-  cart=(ls.get("trillizo_cart")||[]).filter(l=>findItem(l.itemId)&&l.choiceIds);
+  const saved=(ls.get("trillizo_cart")||[]).filter(l=>l&&l.choiceIds);
+  cart=saved.filter(l=>findItem(l.itemId));
   const c=ls.get("trillizo_cliente"); if(c) Object.entries(c).forEach(([k,val])=>{const el=$("#"+k); if(el) el.value=val||""});
-  fillHoras(); render(); spy();
-  await loadSheet(); render(); spy();
-  if(CONFIG.sheetId) setInterval(async()=>{await loadSheet(); render(); if(!$("#cartSheet").hidden) renderCart();}, CONFIG.refrescarCadaSeg*1000);
+  fillHoras(); renderAccounts(); render(); spy();
+  await loadSheet();
+  cart=saved.filter(l=>findItem(l.itemId)); // recupera bebidas guardadas una vez cargada la hoja
+  render(); spy();
+  if(CONFIG.sheetId) setInterval(async()=>{await loadSheet(); render(); if(!$("#cartSheet").hidden) syncForm();}, CONFIG.refrescarCadaSeg*1000);
 })();
 </script>
 
